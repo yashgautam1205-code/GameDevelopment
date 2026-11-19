@@ -1,0 +1,19 @@
+[33mcommit 5392043850b3c1df0182a203f095d9b36de589a7[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m
+Author:     Seyed Ehsan Hashemi <229764628+ehsanhashemi-3914@users.noreply.github.com>
+AuthorDate: Mon Nov 9 20:52:17 2026 +0330
+Commit:     Seyed Ehsan Hashemi <229764628+ehsanhashemi-3914@users.noreply.github.com>
+CommitDate: Mon Nov 9 20:52:17 2026 +0330
+
+    The Silent Annex: first playable version
+    
+    An original third-person survival-horror game for desktop browsers,
+    built with TypeScript, Three.js, Rapier and Vite, with no game engine.
+    
+    - 18 connected spaces across a reception wing, research wing and Level C
+    - Three main puzzles plus two code locks, and two endings
+    - The Hush: a stealth threat driven by player noise, with no combat
+    - Inventory, journal with map, versioned saves with recovery, settings
+    - Every texture, model and sound generated in code
+    - 71 Vitest tests, including full playthroughs and a no-softlock solver
+    
+    Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
