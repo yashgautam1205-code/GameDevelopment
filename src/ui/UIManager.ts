@@ -27,6 +27,7 @@ export class UIManager {
   readonly fade: HTMLElement;
   private navIndex = -1;
   private fadeTimer: number | null = null;
+  private fadeResolvers: (() => void)[] = [];
   onStackChange: ((blocking: boolean) => void) | null = null;
 
   constructor(
@@ -120,14 +121,20 @@ export class UIManager {
     this.top?.update?.(dt);
   }
 
-  /** Fades the whole screen to a colour, resolving when it has got there. */
+  /** Fades the whole screen to a colour, resolving when the latest transition settles. */
   fadeTo(opacity: number, seconds: number, white = false): Promise<void> {
     this.fade.classList.toggle('white', white);
     this.fade.style.transitionDuration = `${seconds}s`;
     this.fade.style.opacity = String(opacity);
     return new Promise((resolve) => {
       if (this.fadeTimer !== null) window.clearTimeout(this.fadeTimer);
-      this.fadeTimer = window.setTimeout(resolve, seconds * 1000);
+      this.fadeResolvers.push(resolve);
+      this.fadeTimer = window.setTimeout(() => {
+        this.fadeTimer = null;
+        const resolvers = this.fadeResolvers;
+        this.fadeResolvers = [];
+        for (const finish of resolvers) finish();
+      }, seconds * 1000);
     });
   }
 }
