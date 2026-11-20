@@ -27,4 +27,17 @@ export interface GameEvents {
   ending: { ending: EndingId };
   'hush:phase': { id: HushId; phase: HushPhase; previous: HushPhase };
   'hush:ended': { id: HushId; outcome: 'survived' | 'caught' };
+  'hush:ai:heard': { position: Vec3; intensity: number; type: 'footstep' | 'door' | 'drop' | 'machinery' | 'interaction' };
+  'hush:ai:state': { state: 'patrol' | 'investigate' | 'chase' | 'search' | 'return' | 'attack' | 'dead'; previous: 'patrol' | 'investigate' | 'chase' | 'search' | 'return' | 'attack' | 'dead' };
+  'hush:ai:attack': { damage: number };
+  'hush:ai:damage': { health: number; damage: number };
+  'hush:ai:death': { respawnSeconds: number };
+  'hush:ai:respawn': { position: Vec3; health: number };
+  'player:sound': {
+    position: Vec3;
+    intensity: number;
+    type: 'footstep' | 'door' | 'drop' | 'machinery' | 'interaction';
+    timestamp: number;
+    sourceId?: string;
+  };
 }

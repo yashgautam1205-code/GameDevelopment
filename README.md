@@ -1,4 +1,4 @@
-# The Silent Annex
+# THE LAST DOOR
 
 An original third-person survival-horror game that runs in a desktop browser. It's a 30 to 45 minute vertical slice with a complete story, three main puzzles (plus two code locks), two endings, saving, and a fully synthesized soundtrack.
 

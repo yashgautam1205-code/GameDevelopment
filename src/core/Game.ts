@@ -14,7 +14,7 @@ import { PhysicsWorld } from '../physics/PhysicsWorld';
 import { CameraController } from '../player/CameraController';
 import { PlayerAnimation, type GesturePose } from '../player/PlayerAnimation';
 import { createCharacter, type CharacterRig } from '../player/PlayerCharacter';
-import { PlayerController } from '../player/PlayerController';
+import { footstepNoise, PlayerController } from '../player/PlayerController';
 import { DOCUMENTS } from '../progression/content/documents';
 import { ANSWER_LINES, ENDINGS, INTRO_CARDS } from '../progression/content/endings';
 import { Atmosphere } from '../rendering/Atmosphere';
@@ -23,7 +23,11 @@ import { PostProcessing } from '../rendering/PostProcessing';
 import { QUALITY_PROFILES, Renderer, suggestQuality } from '../rendering/Renderer';
 import { SecurityFeeds, type FeedView } from '../rendering/SecurityFeeds';
 import { createStorage, SaveManager, type SaveSlot } from '../saving/SaveManager';
+import { HUSH_AI_CONFIG, findAvailableHushSpawn } from '../systems/HushAI';
 import { ListenerActor } from '../systems/ListenerActor';
+import { EnergyWeapon, ENERGY_WEAPON_CONFIG } from '../combat/EnergyWeapon';
+import { EnergyWeaponView } from '../combat/EnergyWeaponView';
+import { claimFirstHushEncounter, FIRST_HUSH_ENCOUNTER_FLAG } from '../systems/FirstHushEncounter';
 import { StoryPresenter } from '../systems/StoryPresenter';
 import { CardSequence, EndingScreen, LoadingScreen } from '../ui/Cards';
 import { DocumentUI } from '../ui/DocumentUI';
@@ -68,6 +72,13 @@ const tempHand = new THREE.Vector3();
 const tempPlayer = new THREE.Vector3();
 const tempAim = new THREE.Vector3();
 
+function HushSpeed(state: 'patrol' | 'investigate' | 'chase' | 'search' | 'return' | 'attack' | 'dead'): number {
+  if (state === 'chase') return 2.55;
+  if (state === 'investigate' || state === 'return') return 1.65;
+  if (state === 'patrol') return 1.15;
+  return 0;
+}
+
 function shortestAngle(from: number, to: number): number {
   return Math.atan2(Math.sin(to - from), Math.cos(to - from));
 }
@@ -84,6 +95,12 @@ export class Game {
   private mode: GameMode = 'booting';
   private session: GameSession;
   private presenter: StoryPresenter | null = null;
+  private hushAIUnsubscribers: (() => void)[] = [];
+  private hushScriptControlActive = false;
+  private firstHushEncounterActive = false;
+  private firstHushAttackStartedAt: number | null = null;
+  private firstHushCameraPosition: THREE.Vector3 | null = null;
+  private firstHushFocusLook = new THREE.Vector3();
 
   private renderer!: Renderer;
   private materials!: MaterialLibrary;
@@ -99,6 +116,9 @@ export class Game {
   private cameraController!: CameraController;
   private interaction!: InteractionSystem;
   private listener!: ListenerActor;
+  private hushSpawn = new THREE.Vector3();
+  private weapon = new EnergyWeapon();
+  private weaponView!: EnergyWeaponView;
   private feeds!: SecurityFeeds;
   private inspector!: ItemInspector;
   private zones = new CameraZones(LEVEL);
@@ -126,6 +146,7 @@ export class Game {
   private hadPointerLock = false;
   private ignorePointerUnlock = false;
   private torchLevel = 0;
+  private hushDiagnostics: HTMLPreElement | null = null;
 
   constructor(
     private canvas: HTMLCanvasElement,
@@ -155,6 +176,13 @@ export class Game {
       if (this.mode === 'playing' && !this.ui.blocking) this.input.requestPointerLock();
     });
     this.ui.onStackChange = (blocking) => this.handleStackChange(blocking);
+    if (import.meta.env.DEV) {
+      this.hushDiagnostics = document.createElement('pre');
+      this.hushDiagnostics.id = 'hush-diagnostics';
+      this.hushDiagnostics.style.cssText =
+        'position:fixed;top:10px;left:10px;z-index:10000;margin:0;padding:10px 12px;color:#b8f5e9;background:rgba(0,12,14,.86);border:1px solid rgba(159,229,220,.5);font:12px/1.45 monospace;pointer-events:none;white-space:pre-wrap';
+      document.body.append(this.hushDiagnostics);
+    }
     this.settings.onChange((data) => {
       this.audio.applyVolumes(data);
       this.applyCameraSettings();
@@ -240,13 +268,23 @@ export class Game {
     this.feedGhost.root.rotation.y = -Math.PI / 2;
     scene.add(this.feedGhost.root);
     new PlayerAnimation(this.feedGhost).update(0.1, { speed: 0, crouch: 0, aimPitch: 0, aimYaw: 0, aiming: false, gesture: 'none' });
-    this.listener = new ListenerActor(scene, this.materials);
-
     const start = new THREE.Vector3(...LEVEL.start.pos);
+    this.physics.step();
+    const hushSpawn = findAvailableHushSpawn(
+      [HUSH_AI_CONFIG.respawn, ...HUSH_AI_CONFIG.respawnAlternatives],
+      start,
+      (candidate) => this.isHushSpawnValid(candidate),
+      6,
+    );
+    if (!hushSpawn) throw new Error('No validated Hush spawn is available in the built level.');
+    this.hushSpawn.copy(hushSpawn);
+    this.listener = new ListenerActor(scene, this.materials, this.physics, hushSpawn);
+
     this.player = new PlayerController(this.physics, start, LEVEL.start.yaw);
     this.cameraController = new CameraController(window.innerWidth / window.innerHeight, this.physics, () => this.player?.collider);
     this.applyCameraSettings();
     scene.add(this.cameraController.camera);
+    this.weaponView = new EnergyWeaponView(this.rig.root);
 
     this.interaction = new InteractionSystem(this.sceneManager.world.interactables, this.physics, () => this.player.collider);
 
@@ -330,6 +368,7 @@ export class Game {
     this.hud.setCovered(blocking);
     if (this.mode !== 'playing') return;
     if (blocking) {
+      this.input.clearPresses();
       this.ignorePointerUnlock = document.pointerLockElement !== null;
       this.input.exitPointerLock();
     } else {
@@ -342,7 +381,32 @@ export class Game {
 
   private bindSession(session: GameSession): void {
     this.presenter?.dispose();
+    for (const unsubscribe of this.hushAIUnsubscribers) unsubscribe();
+    this.hushAIUnsubscribers = [];
+    this.hushScriptControlActive = false;
     this.session = session;
+    this.hushAIUnsubscribers.push(
+      session.bus.on('hush:ai:state', ({ state, previous }) => {
+        if (state === 'dead' && previous !== 'dead') {
+          this.listener.beginDeath();
+          this.audio.play('caught:static', { ignoreSilence: true, volume: 0.65 });
+        }
+      }),
+      session.bus.on('hush:ai:respawn', ({ position }) => {
+        this.listener.beginRespawn(new THREE.Vector3(...position));
+        this.audio.play('stinger:low', { ignoreSilence: true, volume: 0.55 });
+      }),
+      session.bus.on('door:opened', ({ doorId }) => {
+        if (this.mode !== 'playing' || this.firstHushEncounterActive || !claimFirstHushEncounter(session, doorId)) return;
+        this.firstHushEncounterActive = true;
+        void this.playFirstHushEncounter();
+      }),
+      session.bus.on('hush:ai:attack', () => {
+        if (this.firstHushEncounterActive) return;
+        if (this.mode !== 'playing' || this.ui.blocking || this.inputLocks > 0) return;
+        this.presenter?.handleHushAttack();
+      }),
+    );
     this.presenter = new StoryPresenter(session, {
       scene: this.sceneManager,
       audio: this.audio,
@@ -355,7 +419,33 @@ export class Game {
       onCheckpoint: () => this.autosave(),
       onEnding: (ending) => void this.playEnding(ending),
     });
+    session.hushAI.setSpawnPosition(this.hushSpawn);
+    this.listener.resetForSession(this.hushSpawn);
     this.sceneManager.syncAll(session, this.lighting);
+    this.syncWeaponEquipment();
+  }
+
+  private syncWeaponEquipment(): void {
+    const equipped = this.session.inventory.has('energy_pistol');
+    this.weapon.setEquipped(equipped);
+    const visible = equipped && !this.firstHushEncounterActive;
+    this.hud.setWeaponVisible(visible);
+    if (this.weaponView) this.weaponView.setVisible(visible && this.mode === 'playing' && !this.ui.blocking);
+  }
+
+  private isHushSpawnValid(position: THREE.Vector3, exclude = this.listener?.collider ?? undefined): boolean {
+    const inset = 0.4;
+    const insideIndoorRoom = LEVEL.rooms.some((room) => {
+      if (room.openAir || Math.abs(room.floorY - position.y) > 0.1) return false;
+      const [x0, z0, x1, z1] = room.rect;
+      return (
+        position.x >= x0 + inset &&
+        position.x <= x1 - inset &&
+        position.z >= z0 + inset &&
+        position.z <= z1 - inset
+      );
+    });
+    return insideIndoorRoom && this.physics.isHushSpawnClear(position, exclude);
   }
 
   private retireSession(): void {
@@ -400,6 +490,20 @@ export class Game {
       credits: () => {
         this.audio.play('ui:select', { ignoreSilence: true });
         this.ui.open(new CreditsScreen(() => this.ui.close()));
+      },
+      quit: () => {
+        this.audio.play('ui:select', { ignoreSilence: true });
+        this.ui.open(
+          new ConfirmScreen(
+            'Quit THE LAST DOOR? All progress has been preserved at your latest checkpoint. You may safely close this browser window or tab.',
+            'Close Game',
+            () => {
+              window.close();
+              this.ui.close();
+            },
+            () => this.ui.close(),
+          ),
+        );
       },
     };
   }
@@ -473,6 +577,7 @@ export class Game {
     await this.ui.fadeTo(1, 0.7);
     this.ui.closeAll();
     this.retireSession();
+    this.weapon.reset();
     const session = new GameSession(LEVEL);
     this.bindSession(session);
     this.placePlayer(new THREE.Vector3(...LEVEL.start.pos), LEVEL.start.yaw, LEVEL.start.room);
@@ -518,6 +623,7 @@ export class Game {
 
   private placePlayer(position: THREE.Vector3, yaw: number, roomId: string): void {
     this.player.teleport(position, yaw);
+    this.rig.root.rotation.z = 0;
     this.physics.step();
     this.session.setPlayerPose([position.x, position.y, position.z], yaw);
     this.cameraController.setZone(null);
@@ -665,6 +771,10 @@ export class Game {
         break;
       case 'picked-up':
         this.audio.play('pickup', { wet: 0.2 });
+        if (outcome.itemId === 'energy_pistol') {
+          this.syncWeaponEquipment();
+          this.hud.toast('Energy Pistol acquired');
+        }
         break;
       case 'bag-full':
         break;
@@ -748,10 +858,84 @@ export class Game {
     const { checkpoint } = this.session;
     this.placePlayer(new THREE.Vector3(...checkpoint.pos), checkpoint.yaw, checkpoint.room);
     this.player.crouching = false;
+    this.presenter?.clearDamageEffect();
     await wait(1.6);
     this.inputLocks--;
     await this.ui.fadeTo(0, 1.4);
     this.hud.say('...I was on the floor. How long was I on the floor?', 4);
+  }
+
+  private async playFirstHushEncounter(): Promise<void> {
+    this.inputLocks++;
+    this.input.clearPresses();
+    this.hud.setVisible(false);
+
+    const playerPosition = this.player.position.clone();
+    const hushPosition = this.listener.position.clone();
+    const approachDuration = Math.max(2.4, hushPosition.distanceTo(playerPosition) / 1.15);
+    this.listener.appear(
+      [hushPosition.x, hushPosition.y, hushPosition.z],
+      true,
+      approachDuration + 2.2,
+      [playerPosition.x, playerPosition.y, playerPosition.z],
+    );
+    this.firstHushCameraPosition = this.cameraController.camera.position.clone();
+    this.firstHushFocusLook.copy(hushPosition).y += 1.15;
+    this.cameraController.setFocus(this.firstHushCameraPosition, this.firstHushFocusLook);
+    this.cameraController.addShake(0.45);
+    this.lighting.burst(3.2);
+    this.audio.play('stinger:low', { ignoreSilence: true, volume: 0.75 });
+
+    await wait(approachDuration);
+    this.gesture = 'low';
+    this.gestureTimer = 1.1;
+    this.firstHushAttackStartedAt = this.time;
+    this.cameraController.addShake(0.9);
+    this.lighting.burst(1.2);
+    this.audio.play('caught:static', { ignoreSilence: true, volume: 0.85 });
+    await this.ui.fadeTo(1, 1.05);
+    await wait(0.8);
+
+    this.ui.open(
+      new CardSequence(
+        [{ small: 'THE LAST DOOR', text: 'YOU DIED', hold: 1.5 }],
+        () => {
+          this.ui.closeAll();
+          void this.restartAfterFirstHushDeath();
+        },
+        false,
+      ),
+    );
+    await this.ui.fadeTo(0, 0.55);
+  }
+
+  private async restartAfterFirstHushDeath(): Promise<void> {
+    await this.ui.fadeTo(1, 0.45);
+    this.listener.hide();
+    this.firstHushEncounterActive = false;
+    this.firstHushAttackStartedAt = null;
+    this.firstHushCameraPosition = null;
+    this.retireSession();
+    this.weapon.reset();
+    const restartedSession = new GameSession(LEVEL);
+    restartedSession.setFlag(FIRST_HUSH_ENCOUNTER_FLAG);
+    this.bindSession(restartedSession);
+    this.placePlayer(new THREE.Vector3(...LEVEL.start.pos), LEVEL.start.yaw, LEVEL.start.room);
+    this.flashlightOn = true;
+    this.lighting.flashlight.intensity = 0;
+    this.mode = 'playing';
+    this.audio.stopMusic(0.7);
+    this.audio.setAmbience('wind', 0.7);
+    this.hud.setVisible(false);
+    this.input.clearPresses();
+
+    this.ui.open(
+      new CardSequence(INTRO_CARDS, () => {
+        this.ui.closeAll();
+        void this.beginPlay(true);
+      }),
+    );
+    await this.ui.fadeTo(0, 0.55);
   }
 
   /** The story's turning point: the footage plays across every monitor, before the transcript. */
@@ -869,6 +1053,8 @@ export class Game {
 
     this.session.playtime += dt;
     this.session.events.update(dt, this.session.playerPos, this.session.currentRoom);
+    this.weapon.update(dt);
+    this.updateHushAI(dt);
     const distance = this.listener.visible ? this.listener.position.distanceTo(position) : 12;
     hush.update(dt, this.player.noise, distance);
     this.session.suspense.update(dt, {
@@ -894,12 +1080,40 @@ export class Game {
     // In a Hush, she can't hear even her own boots: it's the first thing players notice.
     const loudness = (this.player.crouching ? 0.22 : this.player.speed > 2.6 ? 0.85 : 0.5) * (this.session.hush.active ? 0.2 : 1);
     this.audio.footstep(room.surface, loudness);
+    const position = this.player.position;
+    this.session.bus.emit('player:sound', {
+      position: [position.x, position.y, position.z],
+      intensity: footstepNoise(this.player.crouching, this.player.speed),
+      type: 'footstep',
+      timestamp: this.session.playtime,
+    });
   }
 
   private update(dt: number): void {
     this.simulateFrame(dt);
+    this.updateHushDiagnostics();
     this.render(dt);
     if (this.renderer.trackFrame(dt)) this.post.setSize(this.renderer.width, this.renderer.height, this.renderer.pixelRatio);
+  }
+
+  private updateHushDiagnostics(): void {
+    if (!this.hushDiagnostics || !this.listener || !this.session) return;
+    const hush = this.session.hushAI;
+    const noise = hush.lastNoise;
+    const fmt = (position: THREE.Vector3 | null | undefined) =>
+      position ? `${position.x.toFixed(1)}, ${position.y.toFixed(1)}, ${position.z.toFixed(1)}` : 'none';
+    const spawned = this.listener.root.parent === this.sceneManager.scene && this.listener.collider !== null;
+    this.hushDiagnostics.textContent = [
+      `Hush spawned: ${spawned ? 'YES' : 'NO'}`,
+      `Model created: ${this.listener.modelCreated ? 'YES' : 'NO'}`,
+      `Model visible: ${this.listener.modelVisible ? 'YES' : 'NO'}`,
+      `AI state: ${hush.state.toUpperCase()}`,
+      `World position: ${fmt(this.listener.position)}`,
+      `Distance from player: ${this.listener.position.distanceTo(this.player.position).toFixed(1)} m`,
+      `Last noise: ${noise ? `${noise.intensity.toFixed(2)} (${noise.type})` : 'none'}`,
+      `Noise position: ${fmt(noise?.position)}`,
+      `Investigation target: ${fmt(hush.movementTarget)}`,
+    ].join('\n');
   }
 
   private simulateFrame(dt: number): void {
@@ -912,8 +1126,13 @@ export class Game {
       return;
     }
 
+    this.syncWeaponEquipment();
     const controlling = this.controlling;
     this.input.enabled = controlling;
+    this.weaponView.setVisible(
+      this.mode === 'playing' && this.weapon.equipped && !this.ui.blocking && !this.firstHushEncounterActive,
+    );
+    this.weaponView.update(dt);
     this.hud.setMouseHint(controlling && this.hadPointerLock && document.pointerLockElement === null);
     const look = this.input.consumeLook();
     if (controlling) {
@@ -922,6 +1141,7 @@ export class Game {
     }
 
     if (!this.ui.blocking) this.updateWorld(dt);
+    else this.presenter?.updateDamageEffect(dt);
   }
 
   private handlePlayInput(): void {
@@ -942,8 +1162,115 @@ export class Game {
       this.flashlightOn = !this.flashlightOn;
       this.audio.play('flashlight');
     }
+    if (this.input.consumeFire() && this.weapon.equipped) this.fireWeapon();
     if (this.input.consumePress('interact') && this.interaction.focused) {
       this.useFocused(this.interaction.focused);
+    }
+  }
+
+  private updateHushAI(dt: number): void {
+    const hush = this.session.hushAI;
+    const scriptedControl = this.session.hush.active || this.listener.scriptedControl;
+    if (scriptedControl && hush.state !== 'dead') {
+      // Story appearances own the actor temporarily. Keep the AI's valid physical
+      // position so it can resume there after the authored motion finishes.
+      this.hushScriptControlActive = true;
+      return;
+    }
+    if (this.hushScriptControlActive) {
+      this.hushScriptControlActive = false;
+      if (hush.state !== 'dead') this.listener.resumeAIAt(hush.position);
+    }
+    const playerPosition = this.player.position;
+    const lineOrigin = new THREE.Vector3(
+      hush.position.x,
+      hush.position.y + 1.15,
+      hush.position.z,
+    );
+    const toPlayer = playerPosition.clone().sub(lineOrigin);
+    toPlayer.y = 0;
+    const distance = toPlayer.length();
+    let visible = false;
+    if (hush.active && distance <= 14) {
+      toPlayer.normalize();
+      const hit = this.physics.castRayHit(
+        lineOrigin,
+        toPlayer,
+        distance,
+        this.listener.collider ?? undefined,
+        this.player.collider,
+      );
+      visible =
+        hit === null &&
+        hush.canSeePlayer(
+          playerPosition,
+          this.listener.facing,
+          true,
+          this.player.crouching,
+          this.player.speed > 2.6,
+        );
+    }
+
+    hush.update(
+      dt,
+      playerPosition,
+      visible,
+      this.player.crouching,
+      this.player.speed > 2.6,
+      (candidate) => this.isHushSpawnValid(candidate, this.listener.collider ?? undefined),
+    );
+
+    if (hush.respawning) {
+      return;
+    }
+
+    let speed = HushSpeed(hush.state);
+    if (hush.state === 'patrol' || hush.state === 'return') {
+      speed = hush.state === 'return' ? 1.65 : 1.15;
+    } else if (hush.state === 'investigate') {
+      speed = 1.65;
+    } else if (hush.state === 'chase') {
+      speed = 2.55;
+    } else if (hush.state === 'attack') {
+      speed = 0;
+    }
+
+    this.listener.rigVisibleForAI();
+    const blocked = this.listener.updateAI(
+      dt,
+      hush.movementTarget,
+      playerPosition,
+      this.physics,
+      speed,
+      hush.navigationRevision,
+      hush.state,
+    );
+    hush.position.copy(this.listener.position);
+    hush.noteMovementBlocked(dt, blocked);
+  }
+
+  private fireWeapon(): void {
+    if (!this.weapon.equipped || this.firstHushEncounterActive) return;
+    if (!this.weapon.fire()) {
+      this.hud.toast(this.weapon.energy < 20 ? 'Energy insufficient' : 'Weapon recharging');
+      return;
+    }
+    this.audio.play('weapon:fire', { ignoreSilence: true, volume: 0.72 });
+    this.weaponView.fire();
+    this.cameraController.camera.getWorldDirection(tempForward);
+    const origin = this.cameraController.camera.position;
+    const hit = this.physics.castRayHit(origin, tempForward, 24, this.player.collider);
+    if (!hit) {
+      this.hud.toast('Shot missed');
+      return;
+    }
+    if (this.listener.collider && hit.collider === this.listener.collider) {
+      if (this.session.hushAI.takeDamage(25)) {
+        this.hud.toast(this.session.hushAI.health <= 0 ? 'Hush defeated' : 'Direct hit');
+        this.audio.play('spark', { at: this.listener.position, volume: 0.8 });
+      }
+    } else {
+      this.hud.toast('Shot blocked');
     }
   }
 
@@ -975,6 +1302,11 @@ export class Game {
       aiming: this.flashlightOn,
       gesture: this.gesture,
     });
+    if (this.firstHushAttackStartedAt !== null) {
+      const fall = Math.min(1, (this.time - this.firstHushAttackStartedAt) / 1.1);
+      this.rig.root.rotation.z = -fall * 0.85;
+      this.rig.root.position.y -= fall * 0.22;
+    }
 
     this.updateTorch(dt);
     this.updateInteraction(dt, playerPos);
@@ -983,7 +1315,13 @@ export class Game {
     this.lighting.update(dt, playerPos);
     this.lighting.fill.position.copy(this.cameraController.camera.position);
     const { hush } = this.session;
-    this.listener.update(dt, playerPos, hush.progress);
+    this.listener.updatePresentation(dt);
+    if (hush.active || this.listener.scriptedControl) this.listener.update(dt, playerPos, hush.progress);
+    if (this.firstHushCameraPosition) {
+      this.firstHushFocusLook.copy(this.listener.position);
+      this.firstHushFocusLook.y += 1.15;
+      this.cameraController.setFocus(this.firstHushCameraPosition, this.firstHushFocusLook);
+    }
     this.atmosphere.update(this.time, this.cameraController.camera.position, this.renderer.pixelRatio);
     const distance = this.listener.visible ? this.listener.position.distanceTo(playerPos) : 20;
     this.presenter?.update(dt, distance);
@@ -993,7 +1331,22 @@ export class Game {
 
     this.cameraController.camera.getWorldDirection(tempForward);
     this.audio.updateListener(this.cameraController.camera.position, tempForward);
-    this.hud.update(dt, this.session.battery, this.player.noise);
+    const hushAI = this.session.hushAI;
+    const hushDistance = hushAI.active && hushAI.state !== 'dead' ? hushAI.position.distanceTo(playerPos) : Number.POSITIVE_INFINITY;
+    const proximity = Number.isFinite(hushDistance) ? Math.max(0, 1 - hushDistance / 14) : 0;
+    const threat = hushAI.state === 'chase' || hushAI.state === 'attack' ? proximity : proximity * 0.38;
+    this.hud.setDanger(threat);
+    this.hud.update(
+      dt,
+      this.session.battery,
+      this.player.noise,
+      this.weapon.energy,
+      hushAI.active && hushAI.health < 100 ? hushAI.health : null,
+      hushAI.respawning ? hushAI.respawnRemaining : 0,
+      ENERGY_WEAPON_CONFIG.maxEnergy,
+      this.weapon.isRecharging,
+      this.weapon.equipped,
+    );
 
     if (this.session.currentRoom === 'security') this.updateFeeds(dt);
   }
@@ -1114,12 +1467,14 @@ export class Game {
   dispose(): void {
     this.loop.dispose();
     this.input.dispose();
+    this.hushDiagnostics?.remove();
     this.retireSession();
     this.presenter?.dispose();
     this.audio.dispose();
     this.feeds?.dispose();
     this.inspector?.dispose();
     this.listener?.dispose();
+    this.weaponView?.dispose();
     this.atmosphere?.dispose();
     this.lighting?.dispose();
     this.post?.dispose();

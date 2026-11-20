@@ -10,7 +10,10 @@ import '@fontsource/cormorant-garamond/600.css';
 import '@fontsource/courier-prime/400.css';
 import '@fontsource/vt323/400.css';
 import './ui/ui.css';
+import './ui/aaa-overrides.css';
 import { Game } from './core/Game';
+
+document.title = 'THE LAST DOOR';
 
 const canvas = document.getElementById('game-canvas') as HTMLCanvasElement;
 const ui = document.getElementById('ui') as HTMLElement;

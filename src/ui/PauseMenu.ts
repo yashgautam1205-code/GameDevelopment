@@ -14,9 +14,12 @@ export class PauseMenu implements Screen {
   readonly root: HTMLElement;
 
   constructor(actions: PauseActions) {
-    this.root = el('div', 'screen menu-screen');
+    this.root = el('div', 'screen menu-screen pause-screen');
     this.root.append(
-      el('h2', 'game-title', [el('small', '', 'Paused'), 'The Silent Annex']),
+      el('div', 'pause-heading', [
+        el('div', 'label', 'Session suspended'),
+        el('h2', 'game-title', 'THE LAST DOOR'),
+      ]),
       el('div', 'signal-line'),
       el('nav', 'menu-list', [
         button('menu-item', 'Resume', () => actions.resume()),
@@ -24,8 +27,9 @@ export class PauseMenu implements Screen {
         button('menu-item', 'Journal', () => actions.journal()),
         button('menu-item', 'Load Game', () => actions.load()),
         button('menu-item', 'Settings', () => actions.settings()),
-        button('menu-item', 'Quit to Title', () => actions.quit()),
+        button('menu-item', 'Return to Main Menu', () => actions.quit()),
       ]),
+      el('div', 'menu-footer', 'Time and movement are suspended'),
     );
   }
 }

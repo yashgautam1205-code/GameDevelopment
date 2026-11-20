@@ -25,6 +25,7 @@ const DOOR_OPEN_SOUND: Record<DoorStyle, string> = {
 };
 
 const PHONE_RING_INTERVAL = 4.2;
+const DAMAGE_EFFECT_DURATION = 1;
 
 export interface PresenterServices {
   scene: SceneManager;
@@ -47,6 +48,7 @@ export class StoryPresenter {
   private dipTimer = 0;
   private damageTarget = 0;
   private damageNow = 0;
+  private damageRemaining = 0;
   private phoneTimer = 0;
   private hushWarned = false;
   private musicIntensity = 0.35;
@@ -55,6 +57,7 @@ export class StoryPresenter {
     private session: GameSession,
     private services: PresenterServices,
   ) {
+    this.services.post.damage = 0;
     this.bind();
   }
 
@@ -195,7 +198,7 @@ export class StoryPresenter {
         camera.addShake(0.08);
         break;
       case 'caught':
-        this.damageTarget = 1;
+        this.startDamageEffect();
         audio.play('caught:static', { ignoreSilence: true, volume: 0.9 });
         camera.addShake(0.8);
         break;
@@ -208,12 +211,30 @@ export class StoryPresenter {
         if (previous === 'caught') {
           listener.hide();
           this.endHushEffects();
-          this.damageTarget = 0;
+          this.clearDamageEffect();
           this.services.onCaught();
         }
         hud.setHush(false);
         break;
     }
+  }
+
+  /** Shows the existing caught effect and recovery when the physical Hush lands an attack. */
+  handleHushAttack(): void {
+    this.startDamageEffect();
+    this.services.audio.play('caught:static', { ignoreSilence: true, volume: 0.9 });
+    this.services.camera.addShake(0.8);
+    this.services.onCaught();
+  }
+
+  clearDamageEffect(): void {
+    this.damageTarget = 0;
+    this.damageRemaining = 0;
+  }
+
+  private startDamageEffect(): void {
+    this.damageTarget = 1;
+    this.damageRemaining = DAMAGE_EFFECT_DURATION;
   }
 
   private endHushEffects(): void {
@@ -231,6 +252,7 @@ export class StoryPresenter {
     this.dipTimer = 0;
     this.damageTarget = 0;
     this.damageNow = 0;
+    this.damageRemaining = 0;
     this.phoneTimer = 0;
     const { audio, lighting, listener, post, hud } = this.services;
     audio.setSilence(0);
@@ -251,8 +273,7 @@ export class StoryPresenter {
 
     post.silence = this.silenceNow;
     audio.setSilence(this.silenceNow);
-    this.damageNow += (this.damageTarget - this.damageNow) * (1 - Math.exp(-(this.damageTarget > this.damageNow ? 2.2 : 3.2) * dt));
-    post.damage = this.damageNow < 0.005 ? 0 : this.damageNow;
+    this.updateDamageEffect(dt);
 
     // The heart beats faster the closer it is, and the more it's paying attention.
     const hush = this.session.hush;
@@ -266,6 +287,16 @@ export class StoryPresenter {
         this.phoneTimer = PHONE_RING_INTERVAL;
       }
     }
+  }
+
+  updateDamageEffect(dt: number): void {
+    if (this.damageRemaining > 0) {
+      this.damageRemaining = Math.max(0, this.damageRemaining - dt);
+      if (this.damageRemaining === 0) this.damageTarget = 0;
+    }
+
+    this.damageNow += (this.damageTarget - this.damageNow) * (1 - Math.exp(-(this.damageTarget > this.damageNow ? 2.2 : 3.2) * dt));
+    this.services.post.damage = this.damageNow < 0.005 ? 0 : this.damageNow;
   }
 
   dispose(): void {

@@ -1,10 +1,10 @@
 # MASTER AUTONOMOUS GAME DEVELOPMENT PROMPT
-# PROJECT: THE SILENT ANNEX
+# PROJECT: THE LAST DOOR
 ## Original Cinematic 3D Survival Horror Game
 
 You are operating as an autonomous senior game development studio.
 
-Your mission is to DESIGN, ARCHITECT, PROGRAM, BUILD, TEST, DEBUG, AND POLISH a complete playable 3D survival-horror game called THE SILENT ANNEX.
+Your mission is to DESIGN, ARCHITECT, PROGRAM, BUILD, TEST, DEBUG, AND POLISH a complete playable 3D survival-horror game called THE LAST DOOR.
 
 You are not being asked to produce a tutorial, a project proposal, a technical audit, or a development plan.
 
@@ -16,7 +16,7 @@ You have permission to make normal technical and creative decisions independentl
 1. PROJECT IDENTITY
 ==================================================
 
-Game title: THE SILENT ANNEX
+Game title: THE LAST DOOR
 
 Genre:
 - Third-person 3D survival horror

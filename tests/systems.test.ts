@@ -1,8 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { EventBus } from '../src/core/EventBus';
 import type { GameEvents } from '../src/core/GameEvents';
+import { GameSession } from '../src/core/GameSession';
 import { HUSH_CONFIG, HushSequence } from '../src/systems/HushSequence';
+import { StoryPresenter, type PresenterServices } from '../src/systems/StoryPresenter';
 import { SuspenseDirector, type SuspenseContext } from '../src/systems/SuspenseDirector';
+import { LEVEL } from '../src/world/levels';
 
 const STEP = 1 / 30;
 
@@ -78,6 +81,37 @@ describe('HushSequence', () => {
     hush.cancel();
     expect(hush.active).toBe(false);
     expect(outcomes).toEqual([]);
+  });
+});
+
+describe('StoryPresenter caught damage effect', () => {
+  it('clears stale static and fades the caught effect while UI blocks gameplay updates', () => {
+    const post = { silence: 0, damage: 1 };
+    const presenter = new StoryPresenter(
+      new GameSession(LEVEL),
+      {
+        scene: {},
+        audio: { play: vi.fn(), setSilence: vi.fn(), update: vi.fn() },
+        hud: {},
+        lighting: {},
+        post,
+        camera: { addShake: vi.fn() },
+        listener: {},
+        onCaught: vi.fn(),
+        onCheckpoint: vi.fn(),
+        onEnding: vi.fn(),
+      } as unknown as PresenterServices,
+    );
+    expect(post.damage).toBe(0);
+
+    presenter.handleHushAttack();
+    presenter.updateDamageEffect(0.5);
+    expect(post.damage).toBeGreaterThan(0);
+
+    for (let i = 0; i < 180; i++) presenter.updateDamageEffect(1 / 60);
+
+    expect(post.damage).toBe(0);
+    presenter.dispose();
   });
 });
 

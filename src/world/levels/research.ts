@@ -128,6 +128,7 @@ export const researchRooms: RoomDef[] = [
       { id: 'tp_olander', kind: 'tape', docId: 'tape_olander', pos: [-14.2, 1.15, -2.2], prompt: 'Play the reel' },
       examine('ex_whiteboard', [-12, 1.6, -5.3], 'Look at the whiteboard', 'Equations, then a note in Hana\'s writing, underlined twice: "WHAT IS THE LOUDEST THING IN THE MOUNTAIN?"', { range: 3 }),
       pickup('pk_battery_research', 'battery', [-8.3, 1.03, -2.3], 'Take the battery'),
+      pickup('pk_energy_pistol', 'energy_pistol', [-12.8, 1.05, 0.5], 'Pick up Energy Pistol', { range: 2.2 }),
     ],
   },
   {

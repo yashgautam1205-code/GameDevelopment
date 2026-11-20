@@ -1,4 +1,4 @@
-# Learning from The Silent Annex
+# Learning from THE LAST DOOR
 
 This project is meant to be read, not just played. This guide builds up your mental model of how it works: what exists, where it lives, who calls it, and what happens when it fails.
 

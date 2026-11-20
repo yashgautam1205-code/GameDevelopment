@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Action, Condition, PuzzleId } from '../src/core/Script';
 import { ItemDatabase } from '../src/inventory/ItemDatabase';
+import { HUSH_AI_CONFIG } from '../src/systems/HushAI';
 import { DOCUMENTS } from '../src/progression/content/documents';
 import { OBJECTIVES } from '../src/progression/content/objectives';
 import type { DoorDef, InteractableDef, LinkDef, RoomDef } from '../src/world/LevelDefinition';
@@ -115,6 +116,20 @@ describe('level geometry', () => {
     expect(pos[2]).toBeLessThan(z1);
   });
 
+  it('places the Hush spawn in the lab corridor and the pistol pickup in the research room', () => {
+    const corridor = roomOf('labCorridor');
+    const [x0, z0, x1, z1] = corridor.rect;
+    expect(HUSH_AI_CONFIG.respawn.x).toBeGreaterThan(x0);
+    expect(HUSH_AI_CONFIG.respawn.x).toBeLessThan(x1);
+    expect(HUSH_AI_CONFIG.respawn.z).toBeGreaterThan(z0);
+    expect(HUSH_AI_CONFIG.respawn.z).toBeLessThan(z1);
+
+    const pistol = allInteractables().find((def) => def.id === 'pk_energy_pistol');
+    expect(pistol).toBeDefined();
+    expect(LEVEL.rooms.find((room) => room.interactables.includes(pistol!))?.id).toBe('research');
+    expect(pistol?.prompt).toBe('Pick up Energy Pistol');
+  });
+
   it('sends travel interactables to a point inside their target room', () => {
     for (const def of allInteractables()) {
       if (def.kind !== 'travel') continue;
@@ -163,7 +178,7 @@ describe('level references', () => {
 
   it('gives every item a real use or a way to read it', () => {
     const consumed = new Set(LEVEL.doors.flatMap((door) => (door.lock.type === 'key' ? [door.lock.itemId] : [])));
-    const special = new Set(['battery', 'fuse_30a', 'lift_key', 'test44_reel', 'ignition_key']);
+    const special = new Set(['battery', 'fuse_30a', 'lift_key', 'test44_reel', 'ignition_key', 'energy_pistol']);
     for (const item of ItemDatabase.all) {
       expect(consumed.has(item.id) || special.has(item.id) || Boolean(item.docId), item.id).toBe(true);
     }

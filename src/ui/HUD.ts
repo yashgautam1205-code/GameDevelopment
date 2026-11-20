@@ -30,6 +30,18 @@ export class HUD {
   private statusTimer = 0;
   private controlsTimer = 0;
   private hushing = false;
+  private weaponFill = el('div');
+  private weaponMeter = el('div', 'hud-meter');
+  private hushMeter = el('div', 'hud-hush-meter');
+  private hushHealthFill = el('div');
+  private respawnLabel = el('div', 'hud-respawn');
+  private weaponPanel = el('div', 'hud-weapon');
+  private weaponEnergyText = el('span', 'hud-weapon-value');
+  private weaponMaxText = el('span', 'hud-weapon-max');
+  private weaponRechargeText = el('span', 'hud-weapon-recharge');
+  private weaponPanelFill = el('div');
+  private threatVignette = el('div', 'hud-threat-vignette', undefined, { 'aria-hidden': 'true' });
+  private dangerLevel = 0;
 
   constructor() {
     this.root = el('div', 'hud');
@@ -41,13 +53,38 @@ export class HUD {
     const batteryBar = el('div', 'hud-bar');
     batteryBar.append(this.batteryFill);
     this.noiseBar.append(this.noiseFill);
+    const energyBar = el('div', 'hud-bar hud-energy-bar');
+    energyBar.append(this.weaponFill);
+    this.weaponMeter.append(el('span', 'label', 'Energy'), energyBar);
+    const hushHealthBar = el('div', 'hud-bar hud-hush-health');
+    hushHealthBar.append(this.hushHealthFill);
+    this.hushMeter.append(el('span', 'label', 'Hush'), hushHealthBar);
+    this.hushMeter.style.opacity = '0';
+    this.respawnLabel.style.opacity = '0';
     this.status.append(
       el('div', 'hud-meter', [el('span', 'label', 'Torch'), batteryBar]),
       el('div', 'hud-meter', [el('span', 'label', 'Noise'), this.noiseBar]),
+      this.weaponMeter,
     );
+    const weaponPanelBar = el('div', 'hud-bar hud-weapon-bar');
+    weaponPanelBar.append(this.weaponPanelFill);
+    this.weaponPanel.append(
+      el('div', 'label', 'Energy Pistol'),
+      el('div', 'hud-weapon-type', 'ENERGY'),
+      el('div', 'hud-weapon-readout', [
+        this.weaponEnergyText,
+        el('span', 'hud-weapon-divider', '/'),
+        this.weaponMaxText,
+      ]),
+      weaponPanelBar,
+      this.weaponRechargeText,
+    );
+    this.weaponPanel.style.opacity = '1';
+    this.weaponPanel.style.display = 'none';
+    this.weaponMeter.style.display = 'none';
     this.status.style.opacity = '0';
     this.mouseHint.style.opacity = '0';
-    this.root.append(this.objective, this.status, this.subtitle, this.toasts, this.saveIndicator, this.dot, this.controls, this.mouseHint, this.prompt.root);
+    this.root.append(this.threatVignette, this.objective, this.status, this.hushMeter, this.respawnLabel, this.weaponPanel, this.subtitle, this.toasts, this.saveIndicator, this.dot, this.controls, this.mouseHint, this.prompt.root);
     this.root.style.display = 'none';
   }
 
@@ -143,7 +180,32 @@ export class HUD {
     this.dot.style.opacity = visible ? '1' : '0';
   }
 
-  update(dt: number, battery: number, noise: number): void {
+  /** Adds a location-neutral edge vignette as the existing Hush actor approaches. */
+  setDanger(level: number): void {
+    const next = Math.max(0, Math.min(1, level));
+    if (Math.abs(next - this.dangerLevel) < 0.015) return;
+    this.dangerLevel = next;
+    this.threatVignette.style.opacity = String(next * 0.62);
+    this.threatVignette.classList.toggle('urgent', next > 0.55);
+  }
+
+  setWeaponVisible(visible: boolean): void {
+    this.weaponPanel.style.display = visible ? '' : 'none';
+    this.weaponMeter.style.display = visible ? '' : 'none';
+  }
+
+  update(
+    dt: number,
+    battery: number,
+    noise: number,
+    weaponEnergy = 100,
+    hushHealth: number | null = null,
+    respawnRemaining = 0,
+    weaponMax = 100,
+    weaponRecharging = weaponEnergy < weaponMax,
+    weaponOwned = false,
+  ): void {
+    this.setWeaponVisible(weaponOwned);
     if (this.objectiveTimer > 0) {
       this.objectiveTimer -= dt;
       if (this.objectiveTimer <= 0) this.objective.style.opacity = '0';
@@ -165,6 +227,28 @@ export class HUD {
     this.batteryFill.style.background = battery < 15 ? 'var(--alert)' : '#d8d2bf';
     this.noiseFill.style.width = `${(noise * 100).toFixed(0)}%`;
     this.noiseBar.classList.toggle('loud', noise > 0.2);
+    this.weaponFill.style.width = `${weaponEnergy.toFixed(1)}%`;
+    this.weaponFill.style.background = weaponEnergy < 20 ? 'var(--alert)' : 'var(--accent-bright)';
+    this.weaponEnergyText.textContent = Math.ceil(weaponEnergy).toString().padStart(3, '0');
+    this.weaponMaxText.textContent = weaponMax.toString().padStart(3, '0');
+    this.weaponPanelFill.style.width = `${Math.max(0, Math.min(100, (weaponEnergy / Math.max(weaponMax, 1)) * 100))}%`;
+    this.weaponPanelFill.style.background = weaponEnergy < 20 ? 'var(--alert)' : 'var(--accent-bright)';
+    this.weaponPanel.classList.toggle('depleted', weaponEnergy <= 0);
+    this.weaponRechargeText.textContent =
+      weaponEnergy <= 0 ? 'EMPTY - RECHARGING' : weaponRecharging ? 'RECHARGING' : 'READY';
+    if (hushHealth !== null) {
+      this.hushMeter.style.opacity = '1';
+      this.hushHealthFill.style.width = `${hushHealth.toFixed(1)}%`;
+      this.hushHealthFill.style.background = hushHealth < 30 ? 'var(--alert)' : '#d8d2bf';
+    } else {
+      this.hushMeter.style.opacity = '0';
+    }
+    if (respawnRemaining > 0) {
+      this.respawnLabel.style.opacity = '1';
+      this.respawnLabel.textContent = `HUSH RESPAWN  ${Math.ceil(respawnRemaining).toString().padStart(2, '0')}s`;
+    } else {
+      this.respawnLabel.style.opacity = '0';
+    }
 
     // The status lines come up when something's changing, and fade once they settle.
     if (battery < 15 || noise > 0.5 || this.hushing) this.statusTimer = 3;

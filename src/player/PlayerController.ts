@@ -29,6 +29,11 @@ function shortestAngle(from: number, to: number): number {
   return Math.atan2(Math.sin(to - from), Math.cos(to - from));
 }
 
+export function footstepNoise(crouching: boolean, speed: number): number {
+  if (speed < 0.12) return 0;
+  return crouching ? NOISE_CROUCH : speed > WALK_SPEED + 0.5 ? NOISE_RUN : NOISE_WALK;
+}
+
 export interface MoveIntent {
   /** Strafe and forward, each from -1 to 1. */
   x: number;
@@ -167,7 +172,7 @@ export class PlayerController {
     }
 
     const speed = this.speed;
-    const target = speed < 0.12 ? 0 : this.crouching ? NOISE_CROUCH : speed > WALK_SPEED + 0.5 ? NOISE_RUN : NOISE_WALK;
+    const target = footstepNoise(this.crouching, speed);
     this.noise += (target - this.noise) * (1 - Math.exp(-8 * dt));
   }
 

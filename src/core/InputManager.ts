@@ -15,6 +15,7 @@ export class InputManager {
   private mouseDX = 0;
   private mouseDY = 0;
   private dragging = false;
+  private firePressed = false;
   private lastPadButtons: boolean[] = [];
   private listeners: [EventTarget, string, EventListener][] = [];
   private padMoveX = 0;
@@ -40,8 +41,9 @@ export class InputManager {
     this.listen(window, 'keyup', (event) => this.down.delete((event as KeyboardEvent).code));
     this.listen(window, 'blur', () => this.down.clear());
     this.listen(document, 'mousemove', (event) => this.handleMouseMove(event as MouseEvent));
-    this.listen(element, 'mousedown', () => {
+    this.listen(element, 'mousedown', (event) => {
       this.dragging = true;
+      if ((event as MouseEvent).button === 0) this.firePressed = true;
     });
     this.listen(window, 'mouseup', () => {
       this.dragging = false;
@@ -134,6 +136,12 @@ export class InputManager {
     return was && this.enabled;
   }
 
+  consumeFire(): boolean {
+    const wasPressed = this.firePressed;
+    this.firePressed = false;
+    return wasPressed && this.enabled;
+  }
+
   /** The look movement since the last call, cleared on reading. */
   consumeLook(): { x: number; y: number } {
     const look = { x: this.mouseDX, y: this.mouseDY };
@@ -159,6 +167,7 @@ export class InputManager {
   /** Drops any presses queued while a menu was open, so they don't fire after it closes. */
   clearPresses(): void {
     this.pressed.clear();
+    this.firePressed = false;
     this.mouseDX = 0;
     this.mouseDY = 0;
   }

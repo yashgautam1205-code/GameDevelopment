@@ -23,26 +23,36 @@ const KIND_LABEL: Record<ItemDef['kind'], string> = {
   puzzle: 'Part',
   consumable: 'Supply',
   document: 'Paper',
+  weapon: 'Weapon',
 };
 
 export class InventoryUI implements Screen {
   readonly root: HTMLElement;
   private grid = el('div', 'inventory-grid');
   private details = el('div', 'inv-details');
+  private records = el('div', 'inventory-record-list');
   private selected = 0;
   private dragging = false;
   private listeners: (() => void)[] = [];
 
   constructor(private host: InventoryHost) {
     this.root = el('div', 'screen inventory-screen');
-    const left = el('div', '', [
-      el('h2', 'panel-title', 'Inventory'),
-      el('div', 'label', `${INVENTORY_CAPACITY} slots`),
+    const left = el('section', 'inventory-loadout', [
+      el('div', 'inventory-section-heading', [
+        el('div', '', [el('div', 'label', 'Field equipment'), el('h2', 'panel-title', 'Inventory')]),
+        el('span', 'inventory-capacity', `0 / ${INVENTORY_CAPACITY}`),
+      ]),
       this.grid,
+      el('div', 'inventory-records-heading', [
+        el('span', 'label', 'Collected records'),
+        el('span', 'inventory-record-count', '0'),
+      ]),
+      this.records,
     ]);
-    const center = el('div');
+    const center = el('div', 'inventory-inspector');
     center.style.cursor = 'grab';
-    const right = el('div', '', [this.details]);
+    center.append(el('div', 'inspector-caption', [el('span', 'label', 'Examination'), el('span', '', 'Drag to turn')]));
+    const right = el('section', 'inventory-details', [this.details]);
     right.style.display = 'flex';
     right.style.flexDirection = 'column';
     right.style.justifyContent = 'flex-end';
@@ -116,6 +126,9 @@ export class InventoryUI implements Screen {
   private render(): void {
     const session = this.host.session();
     const items = session.inventory.items;
+    const carriedCount = items.filter((id) => id !== null).length;
+    const capacity = this.root.querySelector('.inventory-capacity');
+    if (capacity) capacity.textContent = `${carriedCount} / ${INVENTORY_CAPACITY}`;
 
     this.grid.replaceChildren(
       ...items.map((id, index) => {
@@ -135,6 +148,26 @@ export class InventoryUI implements Screen {
         slot.addEventListener('dblclick', () => this.useSelected());
         return slot;
       }),
+    );
+
+    const records = session.journal.documents;
+    const recordCount = this.root.querySelector('.inventory-record-count');
+    if (recordCount) recordCount.textContent = String(records.length).padStart(2, '0');
+    this.records.replaceChildren(
+      ...(records.length
+        ? records.map((record, index) => {
+            const row = el('button', 'inventory-record', [
+              el('span', 'inventory-record-index', String(index + 1).padStart(2, '0')),
+              el('span', 'inventory-record-title', record.title),
+              el('span', 'inventory-record-source', record.source),
+            ], { type: 'button' });
+            row.addEventListener('click', () => {
+              this.host.playSound('paper');
+              this.host.openDocument(record.id);
+            });
+            return row;
+          })
+        : [el('div', 'inventory-record-empty', 'No records collected.')]),
     );
 
     const id = items[this.selected];

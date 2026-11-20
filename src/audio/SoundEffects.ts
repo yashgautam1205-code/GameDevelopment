@@ -203,6 +203,15 @@ const CATALOGUE: Record<string, Builder> = {
     return render(ctx, seconds, (t, i) => noise[i] * decay(t, 0.002, 0.03) * 0.6 + Math.sin(TWO_PI * 1400 * t) * Math.exp(-t / 0.03) * 0.05);
   },
   flashlight: burst(0.05, 4800, 0.006, 32, 0.8),
+  'weapon:fire': (ctx) => {
+    const seconds = 0.22;
+    const noise = lowpass(createNoiseSamples(Math.ceil(seconds * ctx.sampleRate), 36), () => 3600, ctx.sampleRate);
+    return render(ctx, seconds, (t, i) => {
+      const envelope = Math.exp(-t * 22);
+      const charge = Math.sin(TWO_PI * (520 - t * 1700) * t) * envelope * 0.22;
+      return noise[i] * envelope * 0.22 + charge;
+    });
+  },
   battery: (ctx) => {
     const seconds = 0.4;
     const noise = lowpass(createNoiseSamples(Math.ceil(seconds * ctx.sampleRate), 33), () => 2600, ctx.sampleRate);

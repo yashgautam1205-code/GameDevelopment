@@ -4,7 +4,7 @@ AuthorDate: Mon Nov 9 20:52:17 2026 +0330
 Commit:     Seyed Ehsan Hashemi <229764628+ehsanhashemi-3914@users.noreply.github.com>
 CommitDate: Mon Nov 9 20:52:17 2026 +0330
 
-    The Silent Annex: first playable version
+    THE LAST DOOR: first playable version
     
     An original third-person survival-horror game for desktop browsers,
     built with TypeScript, Three.js, Rapier and Vite, with no game engine.

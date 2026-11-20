@@ -69,7 +69,7 @@ export class PhysicsWorld {
   }
 
   /** Would a capsule of this size fit here? Stops the player standing up under a low hatch. */
-  capsuleFits(center: Vec3Like, radius: number, halfHeight: number, exclude: Collider): boolean {
+  capsuleFits(center: Vec3Like, radius: number, halfHeight: number, exclude?: Collider): boolean {
     const hit = this.world.intersectionWithShape(
       center,
       { x: 0, y: 0, z: 0, w: 1 },
@@ -81,10 +81,83 @@ export class PhysicsWorld {
     return hit === null;
   }
 
+  isCapsuleSupported(feet: Vec3Like, exclude?: Collider): boolean {
+    const distance = this.castRay(
+      { x: feet.x, y: feet.y + 0.18, z: feet.z },
+      { x: 0, y: -1, z: 0 },
+      0.38,
+      exclude,
+    );
+    return distance !== null && distance <= 0.34;
+  }
+
+  isHushSpawnClear(feet: Vec3Like, exclude?: Collider): boolean {
+    return (
+      this.isCapsuleSupported(feet, exclude) &&
+      this.capsuleFits(
+        { x: feet.x, y: feet.y + 0.93, z: feet.z },
+        0.34,
+        0.56,
+        exclude,
+      ) &&
+      this.capsuleFits(
+        { x: feet.x, y: feet.y + 1.25, z: feet.z },
+        0.34,
+        0.88,
+        exclude,
+      )
+    );
+  }
+
   /** Distance along a normalized direction to the first solid thing, or null if clear. */
   castRay(origin: Vec3Like, direction: Vec3Like, maxDistance: number, exclude?: Collider): number | null {
     const hit = this.world.castRay(new RAPIER.Ray(origin, direction), maxDistance, true, undefined, undefined, exclude);
     return hit ? hit.timeOfImpact : null;
+  }
+
+  castRayHit(
+    origin: Vec3Like,
+    direction: Vec3Like,
+    maxDistance: number,
+    exclude?: Collider,
+    alsoExclude?: Collider,
+  ): { distance: number; collider: Collider } | null {
+    const hit = this.world.castRayAndGetNormal(
+      new RAPIER.Ray(origin, direction),
+      maxDistance,
+      true,
+      undefined,
+      undefined,
+      exclude,
+      undefined,
+      alsoExclude ? (collider) => collider !== alsoExclude : undefined,
+    );
+    if (!hit) return null;
+    return { distance: hit.timeOfImpact, collider: hit.collider };
+  }
+
+  /** Distance to an obstacle using the character's full capsule instead of a thin ray. */
+  castCapsule(
+    origin: Vec3Like,
+    direction: Vec3Like,
+    radius: number,
+    halfHeight: number,
+    maxDistance: number,
+    exclude?: Collider,
+  ): number | null {
+    const hit = this.world.castShape(
+      origin,
+      { x: 0, y: 0, z: 0, w: 1 },
+      direction,
+      new RAPIER.Capsule(halfHeight, radius),
+      0,
+      maxDistance,
+      true,
+      undefined,
+      undefined,
+      exclude,
+    );
+    return hit ? hit.time_of_impact : null;
   }
 
   /**

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GameSession } from '../src/core/GameSession';
 import { SAVE_VERSION, validateSave } from '../src/saving/SaveData';
 import { SaveManager, type StorageBackend } from '../src/saving/SaveManager';
+import { claimFirstHushEncounter, FIRST_HUSH_ENCOUNTER_FLAG } from '../src/systems/FirstHushEncounter';
 import { LEVEL, ROOM_IDS } from '../src/world/levels';
 
 class FakeStorage implements StorageBackend {
@@ -37,6 +38,7 @@ describe('SaveManager', () => {
     const manager = new SaveManager(storage, ROOM_IDS);
     const original = session();
     original.inventory.add('fuse_30a');
+    original.inventory.add('energy_pistol');
     original.setFlag('main_power');
     original.unlockDoor('d_admin');
     original.puzzles.electrical.seatFuse();
@@ -49,6 +51,7 @@ describe('SaveManager', () => {
     const restored = session();
     restored.applySave(result.data);
     expect(restored.inventory.has('fuse_30a')).toBe(true);
+    expect(restored.inventory.has('energy_pistol')).toBe(true);
     expect(restored.check({ flag: 'main_power' })).toBe(true);
     expect(restored.unlockedDoors.has('d_admin')).toBe(true);
     expect(restored.puzzles.electrical.fuseSeated).toBe(true);
@@ -94,6 +97,26 @@ describe('SaveManager', () => {
     manager.save('slot3', older);
     manager.save('auto', newer);
     expect(manager.list().map((entry) => entry.slot)).toEqual(['auto', 'slot3']);
+  });
+});
+
+describe('first Hush encounter', () => {
+  it('can only be claimed by the Research Door once, including after save/load', () => {
+    const original = session();
+    expect(claimFirstHushEncounter(original, 'd_admin')).toBe(false);
+    expect(claimFirstHushEncounter(original, 'd_research')).toBe(true);
+    expect(claimFirstHushEncounter(original, 'd_research')).toBe(false);
+
+    const manager = new SaveManager(new FakeStorage(), ROOM_IDS);
+    expect(manager.save('slot1', original.toSave())).toBe(true);
+    const result = manager.load('slot1');
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const restored = session();
+    restored.applySave(result.data);
+    expect(restored.flags.has(FIRST_HUSH_ENCOUNTER_FLAG)).toBe(true);
+    expect(claimFirstHushEncounter(restored, 'd_research')).toBe(false);
   });
 });
 

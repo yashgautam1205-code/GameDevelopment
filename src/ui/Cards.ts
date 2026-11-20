@@ -11,7 +11,18 @@ export class LoadingScreen {
   constructor() {
     const track = el('div', 'loading-bar');
     track.append(this.bar);
-    this.root = el('div', 'screen loading-screen', [el('div', 'loading-title', 'The Silent Annex'), track, this.note]);
+    const subtitle = el('div', 'loading-subtitle', 'Hollin Ridge Institute  ·  December 1987');
+    this.root = el('div', 'screen loading-screen', [
+      el('div', 'loading-brand', [
+        el('div', 'loading-mark'),
+        el('div', 'loading-title-wrap', [
+          el('div', 'loading-title', 'THE LAST DOOR'),
+          subtitle,
+        ]),
+      ]),
+      track,
+      this.note,
+    ]);
   }
 
   setProgress(fraction: number, note: string): void {
@@ -20,7 +31,7 @@ export class LoadingScreen {
   }
 
   showError(message: string): void {
-    this.root.replaceChildren(el('div', 'loading-title', 'The Silent Annex'), el('div', 'fatal-message', message));
+    this.root.replaceChildren(el('div', 'loading-title', 'THE LAST DOOR'), el('div', 'fatal-message', message));
   }
 
   remove(): void {

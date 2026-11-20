@@ -7,6 +7,8 @@ import { SAVE_VERSION, type CheckpointData, type SaveData } from '../saving/Save
 import { EventDirector } from '../systems/EventDirector';
 import { HushSequence } from '../systems/HushSequence';
 import { SuspenseDirector } from '../systems/SuspenseDirector';
+import { HushAI } from '../systems/HushAI';
+import * as THREE from 'three';
 import type { DoorDef, LevelData, RoomDef } from '../world/LevelDefinition';
 import { EventBus } from './EventBus';
 import type { GameEvents } from './GameEvents';
@@ -29,6 +31,7 @@ export class GameSession implements PuzzleHost {
   readonly journal = new JournalManager(this.bus);
   readonly puzzles = new PuzzleManager(this);
   readonly hush = new HushSequence(this.bus);
+  readonly hushAI = new HushAI(this.bus);
   readonly suspense: SuspenseDirector;
   readonly events: EventDirector;
 
@@ -71,6 +74,22 @@ export class GameSession implements PuzzleHost {
     // The coolant valve is a physical wheel out in the corridor, but it belongs to Puzzle C.
     this.bus.on('flag:changed', ({ flag, value }) => {
       if (flag === 'coolant_open' && value) this.puzzles.openCoolant();
+    });
+
+    this.bus.on('door:opened', () => {
+      this.bus.emit('player:sound', {
+        position: this.playerPos,
+        intensity: 0.6,
+        type: 'door',
+        timestamp: this.playtime,
+        sourceId: 'door',
+      });
+    });
+    this.bus.on('player:sound', (sound) => {
+      this.hushAI.hearSound({
+        ...sound,
+        position: new THREE.Vector3(...sound.position),
+      });
     });
 
     this.bus.on('hush:ended', ({ id, outcome }) => {

@@ -154,7 +154,7 @@ export class PostProcessing {
 
   /** Burst of static, used when the Listener catches the player. */
   set damage(value: number) {
-    this.cinema.uniforms.damage.value = value;
+    this.cinema.uniforms.damage.value = Number.isFinite(value) ? THREE.MathUtils.clamp(value, 0, 1) : 0;
   }
 
   setSize(width: number, height: number, pixelRatio: number): void {

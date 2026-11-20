@@ -1,21 +1,21 @@
-/* The interface for The Silent Annex: institutional paperwork and old hardware,
-   dark and quiet, with amber as the only colour that asks for attention. */
+/* THE LAST DOOR — AAA Survival-Horror UI
+   Cinematic. Restrained. Blood and shadow. */
 
 :root {
-  --ink: #0a0c0d;
-  --panel: rgba(11, 13, 14, 0.94);
-  --panel-solid: #101314;
-  --text: #cfc9b8;
-  --text-dim: #8d897b;
-  --text-faint: #5f5c52;
-  --accent: #c9983f;
-  --accent-bright: #e8bb68;
+  --ink: #080809;
+  --panel: rgba(9, 10, 11, 0.96);
+  --panel-solid: #0d0e0f;
+  --text: #cac3b0;
+  --text-dim: #857f71;
+  --text-faint: #504d44;
+  --accent: #9b1f1f;
+  --accent-bright: #c73232;
   --alert: #c2452e;
-  --ok: #58b07f;
-  --line: rgba(207, 201, 184, 0.14);
-  --line-strong: rgba(201, 152, 63, 0.42);
-  --paper: #c8c0a8;
-  --paper-ink: #24211a;
+  --ok: #4a9068;
+  --line: rgba(190, 180, 164, 0.11);
+  --line-strong: rgba(155, 31, 31, 0.38);
+  --paper: #c2b89a;
+  --paper-ink: #1e1b13;
   --serif: 'Cormorant Garamond', Georgia, serif;
   --sans: 'Barlow Condensed', 'Arial Narrow', sans-serif;
   --mono: 'Courier Prime', 'Courier New', monospace;
@@ -401,7 +401,7 @@ input[type='range']::-moz-range-thumb {
 }
 
 .segmented button.active {
-  background: rgba(201, 152, 63, 0.16);
+  background: rgba(155, 31, 31, );
   color: var(--accent-bright);
 }
 
@@ -512,7 +512,7 @@ input[type='range']::-moz-range-thumb {
 .inv-slot:focus-visible,
 .inv-slot.selected {
   border-color: var(--accent);
-  background: rgba(201, 152, 63, 0.05);
+  background: rgba(155, 31, 31, );
 }
 
 .inv-slot img {
@@ -740,14 +740,14 @@ input[type='range']::-moz-range-thumb {
 }
 
 .map-room {
-  fill: rgba(201, 152, 63, 0.05);
+  fill: rgba(155, 31, 31, );
   stroke: rgba(207, 201, 184, 0.34);
   stroke-width: 0.1;
 }
 
 .map-room.visited {
-  fill: rgba(201, 152, 63, 0.14);
-  stroke: rgba(201, 152, 63, 0.7);
+  fill: rgba(155, 31, 31, );
+  stroke: rgba(155, 31, 31, );
 }
 
 .map-room.current {
@@ -798,11 +798,11 @@ input[type='range']::-moz-range-thumb {
 .doc-sheet.style-terminal {
   background: #05100b;
   background-image: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.24), rgba(0, 0, 0, 0.24) 1px, transparent 1px, transparent 3px);
-  color: #72f0ab;
+  color: #9eb4a2;
   font-family: var(--terminal);
   font-size: 22px;
   line-height: 1.24;
-  text-shadow: 0 0 7px rgba(90, 240, 160, 0.45);
+  text-shadow: 0 0 3px rgba(120, 160, 130, 0.2);
   border: 1px solid #1f3a2c;
 }
 
@@ -916,14 +916,14 @@ input[type='range']::-moz-range-thumb {
   font-family: var(--terminal);
   font-size: 21px;
   line-height: 1.05;
-  color: #72f0ab;
-  text-shadow: 0 0 6px rgba(90, 240, 160, 0.4);
+  color: #9eb4a2;
+  text-shadow: 0 0 3px rgba(120, 160, 130, 0.2);
   margin-top: 18px;
 }
 
 .device-status.fault {
-  color: #ff7a5c;
-  text-shadow: 0 0 6px rgba(255, 90, 60, 0.55);
+  color: #c48c7c;
+  text-shadow: 0 0 3px rgba(170, 90, 70, 0.25);
 }
 
 .device-footer {
@@ -940,21 +940,21 @@ input[type='range']::-moz-range-thumb {
 .keypad-display {
   background: #120605;
   border: 1px solid #000;
-  color: #ff5a3c;
+  color: #c48c7c;
   font-family: var(--terminal);
   font-size: 44px;
   letter-spacing: 0.32em;
   text-align: center;
   height: 62px;
   line-height: 62px;
-  text-shadow: 0 0 9px rgba(255, 90, 60, 0.55);
+  text-shadow: 0 0 3px rgba(170, 90, 70, 0.25);
   margin-bottom: 16px;
 }
 
 .keypad-display.ok {
   background: #06120a;
-  color: #5cff9e;
-  text-shadow: 0 0 9px rgba(90, 255, 158, 0.55);
+  color: #9eb4a2;
+  text-shadow: 0 0 3px rgba(120, 160, 130, 0.2);
 }
 
 .keypad-keys {
@@ -1253,6 +1253,10 @@ input[type='range']::-moz-range-thumb {
   visibility: hidden;
 }
 
+.hud.covered .hud-weapon {
+  visibility: hidden;
+}
+
 .hud-objective {
   position: absolute;
   top: 28px;
@@ -1317,6 +1321,96 @@ input[type='range']::-moz-range-thumb {
 
 .hud-noise-bar.loud > div {
   background: var(--alert);
+}
+
+.hud-energy-bar > div,
+.hud-hush-health > div {
+  background: var(--accent-bright);
+}
+
+.hud-hush-meter {
+  position: absolute;
+  left: 34px;
+  top: 72px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 220px;
+  transition: opacity 0.3s ease;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.9);
+}
+
+.hud-hush-meter .hud-bar,
+.hud-energy-bar {
+  width: 120px;
+}
+
+.hud-respawn {
+  position: absolute;
+  right: 34px;
+  bottom: 26px;
+  color: var(--accent-bright);
+  font-family: var(--mono);
+  font-size: 14px;
+  letter-spacing: 0.16em;
+  text-shadow: 0 1px 8px #000;
+  transition: opacity 0.3s ease;
+}
+
+.hud-weapon {
+  position: absolute;
+  right: 34px;
+  bottom: 30px;
+  width: 176px;
+  display: grid;
+  gap: 5px;
+  color: #e6e0cf;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+  text-shadow: 0 1px 7px rgba(0, 0, 0, 0.95);
+}
+
+.hud-weapon .label {
+  color: var(--accent-bright);
+  font-size: 11px;
+}
+
+.hud-weapon-type,
+.hud-weapon-recharge {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  color: var(--text-dim);
+}
+
+.hud-weapon-readout {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 19px;
+  letter-spacing: 0.08em;
+}
+
+.hud-weapon-divider,
+.hud-weapon-max {
+  color: var(--text-dim);
+  font-size: 13px;
+}
+
+.hud-weapon-bar {
+  width: 100%;
+  height: 3px;
+  background: rgba(207, 201, 184, 0.2);
+}
+
+.hud-weapon-bar > div {
+  background: var(--accent-bright);
+  transition: width 0.16s linear, background 0.2s ease;
+}
+
+.hud-weapon.depleted .hud-weapon-recharge {
+  color: var(--alert);
 }
 
 .hud-subtitle {

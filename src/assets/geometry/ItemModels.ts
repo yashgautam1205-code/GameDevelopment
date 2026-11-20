@@ -16,6 +16,15 @@ function keyShape(b: PropBuilder, metal: LibraryMaterialId, bowRadius: number): 
 }
 
 const MODELS: Record<string, ModelFn> = {
+  energyPistol: (b) => {
+    b.box(0.28, 0.12, 0.3, 0, 0.025, 0, 'metalBrushed');
+    b.box(0.2, 0.075, 0.27, 0, 0.035, -0.02, 'metalGreen');
+    b.box(0.12, 0.14, 0.12, 0, 0.09, -0.075, 'metalBrushed');
+    b.box(0.13, 0.2, 0.12, 0, -0.09, 0.065, 'plastic');
+    b.box(0.16, 0.025, 0.18, 0, 0.105, -0.13, 'plasticBeige');
+    b.box(0.035, 0.025, 0.16, 0, 0.11, -0.13, 'metalGreen');
+    for (const x of [-0.11, 0.11]) b.box(0.012, 0.035, 0.15, x, 0.02, -0.12, 'metalGreen');
+  },
   battery: (b) => {
     b.box(0.09, 0.1, 0.09, 0, 0.05, 0, 'steelBlue');
     b.box(0.092, 0.03, 0.092, 0, 0.055, 0, 'plasticBeige');

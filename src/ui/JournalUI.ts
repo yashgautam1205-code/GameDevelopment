@@ -60,9 +60,14 @@ export class JournalUI implements Screen {
   }
 
   private render(): void {
+    const records = this.session.journal.documents;
+    const header = el('div', 'journal-header-tools', [
+      this.tabs,
+      el('span', 'journal-record-count', `${String(records.length).padStart(2, '0')} entr${records.length === 1 ? 'y' : 'ies'}`),
+    ]);
     const labels: [Tab, string][] = [
       ['objectives', 'Objective'],
-      ['documents', 'Documents'],
+      ['documents', 'Evidence'],
       ['map', 'Map'],
     ];
     this.tabs.replaceChildren(
@@ -72,6 +77,8 @@ export class JournalUI implements Screen {
         return element;
       }),
     );
+    const panelHeader = this.root.querySelector('.journal-panel > .panel-header');
+    if (panelHeader) panelHeader.replaceChildren(el('h2', 'panel-title', 'Field Journal'), header);
     if (this.tab === 'objectives') this.renderObjectives();
     else if (this.tab === 'documents') this.renderDocuments();
     else this.renderMap();
@@ -94,8 +101,12 @@ export class JournalUI implements Screen {
     const list = el(
       'div',
       'doc-list',
-      docs.map((doc) => {
-        const row = el('button', `doc-row${doc.id === this.docId ? ' active' : ''}`, [doc.title, el('small', '', doc.source)], { type: 'button' });
+      docs.map((doc, index) => {
+        const row = el('button', `doc-row${doc.id === this.docId ? ' active' : ''}`, [
+          el('span', 'doc-entry-index', `ENTRY ${String(index + 1).padStart(2, '0')}`),
+          el('span', 'doc-entry-title', doc.title),
+          el('small', '', doc.source),
+        ], { type: 'button' });
         row.addEventListener('click', () => {
           this.docId = doc.id;
           this.playSound('paper');
@@ -105,10 +116,18 @@ export class JournalUI implements Screen {
       }),
     );
     const current = docs.find((doc) => doc.id === this.docId) ?? docs[0];
+    const currentIndex = current ? docs.findIndex((doc) => doc.id === current.id) : -1;
     const pane = el(
       'div',
       'doc-pane',
-      current ? [el('div', 'document-view', [el('h2', 'doc-title', current.title), el('div', 'label doc-source', current.source), documentContent(current)])] : [],
+      current ? [
+        el('div', 'document-view', [
+          el('div', 'label document-entry-number', `Evidence record  /  ${String(currentIndex + 1).padStart(2, '0')}`),
+          el('h2', 'doc-title', current.title),
+          el('div', 'label doc-source', current.source),
+          documentContent(current),
+        ]),
+      ] : [el('div', 'post-empty', 'No records have been collected.')],
     );
     this.body.replaceChildren(list, pane);
   }

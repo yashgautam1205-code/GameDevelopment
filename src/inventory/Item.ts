@@ -1,4 +1,4 @@
-export type ItemKind = 'key' | 'puzzle' | 'consumable' | 'document';
+export type ItemKind = 'key' | 'puzzle' | 'consumable' | 'document' | 'weapon';
 
 export interface ItemDef {
   id: string;

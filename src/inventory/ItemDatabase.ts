@@ -2,6 +2,13 @@ import type { ItemDef } from './Item';
 
 const items: ItemDef[] = [
   {
+    id: 'energy_pistol',
+    name: 'Energy Pistol',
+    kind: 'weapon',
+    description: 'A prototype sidearm from the research lab. Its capacitors recharge slowly while carried.',
+    model: 'energyPistol',
+  },
+  {
     id: 'battery',
     name: 'Torch Battery',
     kind: 'consumable',
